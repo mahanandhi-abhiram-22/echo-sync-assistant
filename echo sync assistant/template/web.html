@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echo Assistant</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Roboto:wght@400;700&display=swap');
+
+        body {
+            background-color: #f9f3df;
+            color: #2c2c2c;
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            font-family: 'Pacifico', cursive;
+            color: #0056b3;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        #chat-box {
+            border: 1px solid #ccc;
+            padding: 20px;
+            width: 80%;
+            height: 400px;
+            overflow-y: scroll;
+            margin-bottom: 20px;
+            background-color: #fff;
+            color: #2c2c2c;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .user-message {
+            color: #007bff;
+            text-align: left;
+            margin: 10px 0;
+            word-wrap: break-word;
+        }
+        .assistant-message {
+            color: #28a745;
+            text-align: left;
+            margin: 10px 0;
+            word-wrap: break-word;
+        }
+        #user-input {
+            width: 70%;
+            padding: 15px;
+            margin-right: 10px;
+            border-radius: 25px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            font-size: 16px;
+        }
+        #send-btn, #speak-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            margin-top: 10px; /* Add margin to separate buttons */
+        }
+        
+        #send-btn:hover, #speak-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        #male-female-options {
+            display: flex;
+            justify-content: flex-end; /* Align options to the right */
+        }
+        
+        #male-option, #female-option {
+            margin-left: 10px; /* Add margin between options */
+        }
+        
+        #male-label, #female-label {
+            color: #6c757d; /* Set color for options label */
+            font-size: 14px;
+        }
+        
+        
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Echo Assistant</h1>
+        <img src="assistant_logo.png" alt="Assistant Logo" width="100">
+        <div id="chat-box"></div>
+        <div>
+            <input type="text" id="user-input" placeholder="Type your message here...">
+            <button id="send-btn">Send</button>
+            <button id="speak-btn">Speak</button>
+            <select id="voice-select">
+                <option value="UK English Female">Female</option>
+                <option value="UK English Male">Male</option>
+            </select>
+        </div>
+    </div>
+    
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://code.responsivevoice.org/responsivevoice.js?key=RkAAIEAq"></script>
+    <script>
+        $(document).ready(function() {
+            let recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            $('#send-btn').click(function() {
+                sendMessage();
+            });
+
+            $('#speak-btn').click(function() {
+                recognition.lang = $('#voice-select').val();
+                recognition.start();
+            });
+
+            recognition.onresult = function(event) {
+                let transcript = event.results[0][0].transcript;
+                $('#user-input').val(transcript);
+                sendMessage();
+            };
+
+            recognition.onerror = function(event) {
+                console.error("Speech recognition error detected: " + event.error);
+            };
+
+            $('#user-input').keypress(function(e) {
+                if (e.which == 13) { // Enter key pressed
+                    sendMessage();
+                }
+            });
+
+            function sendMessage() {
+                let message = $('#user-input').val();
+                if (message.trim() === '') return;
+
+                // Display user message
+                $('#chat-box').append('<div class="user-message">' + message + '</div>');
+                $('#chat-box').scrollTop($('#chat-box')[0].scrollHeight);
+
+                // Clear input box
+                $('#user-input').val('');
+
+                // Send message to the server
+                $.ajax({
+                    url: '/assistant',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ message: message }),
+                    success: function(response) {
+                        let reply = response.response;
+
+                        // Display assistant response
+                        $('#chat-box').append('<div class="assistant-message">' + reply + '</div>');
+                        $('#chat-box').scrollTop($('#chat-box')[0].scrollHeight);
+
+                        // Speak the response
+                        speakInChunks(reply);
+                    },
+                    error: function(error) {
+                        console.error('Error:', error);
+                    }
+                });
+            }
+
+            function speakInChunks(text) {
+                let maxChunkLength = 100; // Define max chunk length
+                let chunks = [];
+
+                while (text.length > 0) {
+                    let chunk = text.slice(0, maxChunkLength);
+                    let lastSpace = chunk.lastIndexOf(' ');
+                    if (lastSpace > 0) {
+                        chunk = chunk.slice(0, lastSpace);
+                    }
+                    chunks.push(chunk);
+                    text = text.slice(chunk.length);
+                }
+
+                function speakChunks(index) {
+                    if (index < chunks.length) {
+                        responsiveVoice.speak(chunks[index], $('#voice-select').val(), {
+                            onend: function() {
+                                speakChunks(index + 1);
+                            }
+                        });
+                    }
+                }
+
+                speakChunks(0);
+            }
+        });
+    </script>
+</body>
+</html>
